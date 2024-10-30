@@ -102,11 +102,11 @@ abstract class AbstractConfigContainer<T>(
 
     abstract fun convert(input: Any?): T
     open fun save(value: T) {
-        config.config.set(path, value)
+        defaultSaver<T>()(config.config, path, value)
     }
 
     open fun saveDefault(config: YamlConfiguration) {
-        config.set(path, configDefault)
+        defaultSaver<T>()(config, path, configDefault)
     }
 }
 
@@ -138,7 +138,6 @@ class ComponentContainer(
     comments: List<String> = emptyList(),
     val serializer: MiniMessage = TextFormatter.DEFAULT_SERIALIZER,
     vararg val placeholders: TagResolver = emptyArray(),
-    val dynamicPlaceholders: Map<String, (Any?) -> TagResolver?> = emptyMap(),
 ) : AbstractConfigContainer<Component>(
     config, path,
     serializer.deserialize(defaultString, *placeholders),
@@ -155,14 +154,17 @@ class ComponentContainer(
         config.set(path, configDefaultString)
     }
 
-    fun get(input: Map<String, Any?>): Component {
-        val placeholders = TagResolver.builder().resolvers(*this.placeholders)
-        for ((key, value) in input) {
-            dynamicPlaceholders[key]?.invoke(value)?.let { placeholders.resolvers(it) }
-        }
-        return serializer.deserialize(toString(config.config.get(path)) ?: defaultString, placeholders.build())
-    }
+    fun add(vararg placeholders: TagResolver) = ComponentContainer(
+        config,
+        path,
+        defaultString,
+        configDefaultString,
+        comments,
+        serializer,
+        TagResolver.builder().resolvers(*this.placeholders).resolvers(*placeholders).build()
+    )
 }
+
 
 val toString: Converter<String> = { input -> input?.toString() }
 val toByte: Converter<Byte> = { input -> input?.toString()?.toByte() }
@@ -190,6 +192,11 @@ val toBoolean: Converter<Boolean> = { input ->
         else -> null
     }
 }
+
+fun toComponent(
+    serializer: MiniMessage = TextFormatter.DEFAULT_SERIALIZER,
+    vararg placeholders: TagResolver
+): Converter<Component> = { input -> input?.let { serializer.deserialize(it.toString(), *placeholders) } }
 
 fun <T> toList(convertor: Converter<T>): Converter<List<T>> = { input ->
     if (input !is List<*>) {
@@ -225,6 +232,35 @@ fun <T> toMap(convertor: Converter<T>): Converter<Map<String, T>> = { input ->
         else -> null
     }
 }
+
+fun <T> defaultSaver(): Saver<T> = { config, path, value -> config.set(path, value) }
+fun <T> saveList(saver: Saver<T>? = null): Saver<List<T>> = { config, path, value ->
+    if (value != null) {
+        if (saver == null) {
+            config.set(path, value)
+        } else {
+            val list = ArrayList<Any?>()
+            for (el in value) {
+                saver(config, "temp", el)
+                config.get(path)?.let { list.add(it) }
+                config.set("temp", null)
+            }
+            config.set(path, list)
+        }
+    }
+}
+
+fun <T> saveMap(saver: Saver<T>? = null): Saver<Map<String, T>> = { config, path, value ->
+    if (value != null) {
+        for ((key, v) in value) {
+            (saver ?: defaultSaver<T>())(config, "$path.$key", v)
+        }
+    }
+}
+
+fun saveComponent(serializer: MiniMessage = TextFormatter.DEFAULT_SERIALIZER): Saver<Component> =
+    { config, path, value -> config.set(path, value?.let { serializer.serialize(it) }) }
+
 
 fun <T> Config.container(
     path: String,
@@ -368,7 +404,6 @@ fun Config.component(
     comments: List<String> = emptyList(),
     serializer: MiniMessage = TextFormatter.DEFAULT_SERIALIZER,
     vararg placeholders: TagResolver = emptyArray(),
-    dynamicPlaceholders: Map<String, (Any?) -> TagResolver?> = emptyMap(),
     configDefault: String? = default,
 ) = ComponentContainer(
     this,
@@ -378,7 +413,6 @@ fun Config.component(
     comments,
     serializer,
     *placeholders,
-    dynamicPlaceholders = dynamicPlaceholders
 ).also { containers.add(it) }
 
 fun <T> Config.list(
@@ -387,8 +421,8 @@ fun <T> Config.list(
     comments: List<String> = emptyList(),
     convertor: Converter<T>,
     configDefault: List<T>? = default,
-    saver: Saver<List<T>>? = null,
-) = container(path, default, comments, toList(convertor), configDefault, saver)
+    saver: Saver<T>? = null,
+) = container(path, default, comments, toList(convertor), configDefault, saveList(saver))
 
 fun <T> Config.map(
     path: String,
@@ -396,5 +430,5 @@ fun <T> Config.map(
     comments: List<String> = emptyList(),
     convertor: Converter<T>,
     configDefault: Map<String, T>? = default,
-    saver: Saver<Map<String, T>>? = null,
-) = container(path, default, comments, toMap(convertor), configDefault, saver)
+    saver: Saver<T>? = null,
+) = container(path, default, comments, toMap(convertor), configDefault, saveMap(saver))

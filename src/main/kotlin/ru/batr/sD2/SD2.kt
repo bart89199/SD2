@@ -1,6 +1,9 @@
 package ru.batr.sD2
 
 import org.bukkit.Bukkit
+import org.bukkit.command.Command
+import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.batr.sD2.config.MainConfig
 import ru.batr.sD2.config.MessagesConfig
@@ -28,15 +31,15 @@ class SD2 : JavaPlugin() {
     override fun onDisable() {
         // Plugin shutdown logic
     }
-/*
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>?): Boolean {
         if (!args.isNullOrEmpty()) {
             if (sender !is Player) return false
             when(args[0]) {
                 "1" -> {
                     MainConfig.testItem = sender.inventory.itemInMainHand
-                    sender.sendMessage(MessagesConfig.itemChanged.get(mapOf("item" to MainConfig.testItem)))
-                    sender.sendMessage(MessagesConfig.itemChanged.value)
+                    sender.sendMessage(MessagesConfig.itemChanged(MainConfig.testItem))
+                    sender.sendMessage(MessagesConfig.itemChanged)
                 }
                 "2" -> {
                     MainConfig.testList.forEach {
@@ -61,7 +64,7 @@ class SD2 : JavaPlugin() {
         }
         return true
     }
-*/
+
     fun reload() {
         instance = this
         SD2.classLoader = this.classLoader

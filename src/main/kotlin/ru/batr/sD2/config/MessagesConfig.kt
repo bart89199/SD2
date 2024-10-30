@@ -4,19 +4,14 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import org.bukkit.inventory.ItemStack
 
 object MessagesConfig : Config("messages.yml") {
-    val itemChanged = component(
+    private val itemChangedDelegate = component(
         "itemChanged",
         "<prefix><aqua>Предмет изменён на <item></aqua>",
         listOf("Этот тест, лол"),
         configDefault = "1",
-        placeholders = arrayOf(Placeholder.parsed("item", "новый")),
-        dynamicPlaceholders = mapOf("item" to { input ->
-            Placeholder.parsed(
-                "item",
-                if (input is ItemStack) input.type.toString() else "новый"
-            )
-        })
     )
+    var itemChanged by itemChangedDelegate
+    fun itemChanged(itemStack: ItemStack) = itemChangedDelegate.add(Placeholder.parsed("item", itemStack.type.toString())).value
     val reloadMessage by component(
         "reloadMessage",
         "<prefix><aqua>Конфиг <server> успешно перезагружен!</aqua>",

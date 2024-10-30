@@ -22,7 +22,6 @@ object MainConfig : Config("config.yml") {
         listOf("Link to discord server"),
         MiniMessage.miniMessage(),
     )
-
     var testItem by itemStack(
         "test.item",
         ItemStack(Material.STONE),
