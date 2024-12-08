@@ -43,8 +43,6 @@ fun toComponent(
     vararg placeholders: TagResolver
 ): Converter<Component> = { input -> input?.let { serializer.deserialize(it.toString(), *placeholders) } }
 
-fun fromComponent(serializer: MiniMessage): SaveConvertor<Component, String> = { it?.let { serializer.serialize(it) } }
-
 fun <T> toList(convertor: Converter<T>): Converter<List<T>> = { input ->
     if (input !is List<*>) {
         null
@@ -80,35 +78,6 @@ fun <T> toMap(convertor: Converter<T>): Converter<Map<String, T>> = { input ->
     }
 }
 
-//fun <T> defaultSaver(): SaveConvertor<T> = { config, path, value -> config.set(path, value) }
-//fun <T> saveList(saver: Saver<T>? = null): Saver<List<T>> = { config, path, value ->
-//    if (value != null) {
-//        if (saver == null) {
-//            config.set(path, value)
-//        } else {
-//            val list = ArrayList<Any?>()
-//            for (el in value) {
-//                saver(config, "temp", el)
-//                list.add(config.get("temp"))
-//                config.set("temp", null)
-//            }
-//            defaultSaver<Any>()(config, path, list)
-//        }
-//    }
-//}
-
-//fun <T> saveMap(saveConvertor: SaveConvertor<T>? = null): SaveConvertor<Map<String, T>> = { config, path, value ->
-//    if (value != null) {
-//        for ((key, v) in value) {
-//            (saveConvertor ?: defaultSaver<T>())(config, "$path.$key", v)
-//        }
-//    }
-//}
-
-//fun saveComponent(serializer: MiniMessage = TextFormatter.DEFAULT_SERIALIZER): SaveConvertor<Component> =
-//    { config, path, value -> config.set(path, value?.let { serializer.serialize(it) }) }
-
-
 fun <T> Config.container(
     path: String,
     default: () -> T,
@@ -120,68 +89,45 @@ fun <T> Config.container(
 fun <T, C> Config.cctContainer(
     path: String,
     convertor: Converter<T>,
-    saveConvertor: SaveConvertor<T, C>,
     default: () -> T,
-    configDefault: () -> C? = { saveConvertor(default()) },
+    configDefault: () -> C?,
     comments: List<String>,
 ) = ConfigContainerCCT(
     this,
     path,
-    saveConvertor,
     convertor,
     default,
     configDefault,
     comments
 ).also { containers.add(it) }
 
-//fun <T, C> Config.cctContainer(
-//    path: String,
-//    convertor: Converter<T>,
-//    saveConvertor: SaveConvertor<T, C>,
-//    configDefault: () -> C,
-//    default: () -> T = {
-//        convertor(configDefault())
-//            ?: throw IllegalArgumentException("Config parameter default value can't converting to null")
-//    },
-//    comments: List<String>,
-//) = ConfigContainerCCT(
-//    this,
-//    path,
-//    saveConvertor,
-//    convertor,
-//    default,
-//    configDefault,
-//    comments
-//).also { containers.add(it) }
-
 fun <T, C> Config.cctContainer(
     path: String,
     convertor: Converter<T>,
-    saveConvertor: SaveConvertor<T, C>,
-    default: () -> T,
+    configDefault: () -> C,
     comments: List<String>,
-    configDefaultT: () -> T? = default,
+    default: () -> T = {
+        convertor(configDefault())
+            ?: throw IllegalArgumentException("Config parameter default value can't converting to null")
+    },
 ) = ConfigContainerCCT(
     this,
     path,
-    saveConvertor,
     convertor,
     default,
-    configDefaultT,
+    configDefault,
     comments
 ).also { containers.add(it) }
 
 fun <T, C> Config.cctContainerC(
     path: String,
     convertor: Converter<T>,
-    saveConvertor: SaveConvertor<T, C>,
     defaultC: () -> C,
     comments: List<String>,
     configDefault: () -> C? = defaultC,
 ) = ConfigContainerCCT(
     this,
     path,
-    saveConvertor,
     convertor,
     {
         convertor(defaultC())
@@ -300,7 +246,6 @@ fun Config.component(
 ) = cctContainer(
     path,
     toComponent(serializer, *placeholders),
-    fromComponent(serializer),
     default,
     configDefault,
     comments,
@@ -315,8 +260,8 @@ fun Config.component(
 ) = cctContainer(
     path,
     toComponent(serializer, *placeholders),
-    fromComponent(serializer),
     default,
+    { serializer.serialize(default()) },
     comments,
 )
 
@@ -330,7 +275,6 @@ fun Config.componentS(
 ) = cctContainerC(
     path,
     toComponent(serializer, *placeholders),
-    fromComponent(serializer),
     defaultS,
     comments,
     configDefault,
@@ -345,7 +289,6 @@ fun Config.componentS(
 ) = cctContainerC(
     path,
     toComponent(serializer, *placeholders),
-    fromComponent(serializer),
     defaultS,
     comments,
 )

@@ -7,9 +7,9 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.logging.Level
+import kotlin.reflect.KProperty
 
 typealias Converter<T> = (Any?) -> T?
-typealias SaveConvertor<F, T> = (F?) -> T?
 
 abstract class Config(name: String) {
     var name: String
@@ -40,7 +40,7 @@ abstract class Config(name: String) {
                 YamlConfiguration.loadConfiguration(InputStreamReader(it, Charsets.UTF_8))
             } ?: YamlConfiguration()
         for (container in containers) {
-            container.saveDefault(defaultConfig)
+            container.setDefault(defaultConfig)
             defaultConfig.setComments(container.path, container.comments)
         }
     }
@@ -82,19 +82,23 @@ abstract class AbstractConfigContainer<T>(
     val path: String,
     val comments: List<String> = emptyList(),
 ) : Container<T> {
-    override var value: T
-        get() = get()
-        set(value) {
-            save(value)
-            config.save()
-        }
-
     abstract fun get(): T
-    open fun save(value: T?, config0: YamlConfiguration = config.config) {
+    override fun getValue(thisRef: Any, property: KProperty<*>): T = get()
+    abstract fun setDefault(config: YamlConfiguration)
+}
+
+abstract class AbstractEditableConfigContainer<T>(
+    config: Config,
+    path: String,
+    comments: List<String> = emptyList(),
+) : AbstractConfigContainer<T>(config, path, comments) {
+    protected open fun setValue(value: T?, config0: YamlConfiguration = config.config) {
         config0.set(path, value)
     }
-
-    abstract fun saveDefault(config: YamlConfiguration)
+    operator fun setValue(thisRef: Any, property: KProperty<*>, value: T?) {
+        setValue(value)
+        config.save()
+    }
 }
 
 abstract class AbstractConfigContainerCCT<T, C>(
@@ -103,9 +107,12 @@ abstract class AbstractConfigContainerCCT<T, C>(
     comments: List<String> = emptyList(),
 ) : AbstractConfigContainer<T>(config, path, comments) {
 
-    abstract fun onSaveConvert(input: T?): C?
-    override fun save(value: T?, config0: YamlConfiguration) {
-        config0.set(path, onSaveConvert(value))
+    protected open fun setValue(value: C?, config0: YamlConfiguration = config.config) {
+        config0.set(path, value)
+    }
+    fun set(value: C) {
+        setValue(value)
+        config.save()
     }
 }
 
@@ -116,69 +123,23 @@ class ConfigContainer<T>(
     val configDefault: () -> T? = default,
     comments: List<String> = emptyList(),
     val convertor: Converter<T>,
-) : AbstractConfigContainer<T>(config, path, comments) {
+) : AbstractEditableConfigContainer<T>(config, path, comments) {
     override fun get() = if (config.isLoaded()) convertor(config.config.get(path)) ?: default() else default()
-    override fun saveDefault(config: YamlConfiguration) = save(configDefault(), config)
+    override fun setDefault(config: YamlConfiguration) = setValue(configDefault(), config)
 }
 
 class ConfigContainerCCT<T, C>(
     config: Config,
     path: String,
-    val saveConvertor: SaveConvertor<T, C>,
     val convertor: Converter<T>,
     val default: () -> T,
-    val configDefault: () -> C? = { saveConvertor(default()) },
+    val configDefault: () -> C?,
     comments: List<String> = emptyList(),
 ) : AbstractConfigContainerCCT<T, C>(config, path, comments) {
-//    constructor(
-//        config: Config,
-//        path: String,
-//        saveConvertor0: SaveConvertor<T, C>,
-//        convertor: Converter<T>,
-//        default: () -> T,
-//        configDefaultT: () -> T? = default,
-//        comments: List<String> = emptyList(),
-//    ) : this(
-//        config,
-//        path,
-//        saveConvertor = saveConvertor0,
-//        convertor,
-//        default,
-//        { saveConvertor0(configDefaultT()) },
-//        comments
-//    )
-//    constructor(
-//        config: Config,
-//        path: String,
-//        saveConvertor0: SaveConvertor<T, C>,
-//        convertor: Converter<T>,
-//        defaultC: () -> C,
-//        configDefault: () -> C? = defaultC,
-//        comments: List<String> = emptyList(),
-//    ) : this(
-//        config,
-//        path,
-//        saveConvertor0,
-//        convertor,
-//        { convertor(defaultC()) ?: throw IllegalArgumentException("Config parameter default value can't converting to null") },
-//        configDefault,
-//        comments
-//    )
-//    constructor(
-//        config: Config,
-//        path: String,
-//        saveConvertor: SaveConvertor<T, C>,
-//        convertor: Converter<T>,
-//        configDefault: () -> C,
-//        default: () -> T = { convertor(configDefault()) ?: throw IllegalArgumentException("Config parameter default value can't converting to null") },
-//        comments: List<String> = emptyList(),
-//    ) : this(config, path, saveConvertor, convertor, default, configDefault, comments)
 
-    override fun onSaveConvert(input: T?): C? = saveConvertor(input)
     override fun get(): T = if (config.isLoaded()) convertor(config.config.get(path)) ?: default() else default()
-    override fun saveDefault(config: YamlConfiguration) {
-        config.set(path, configDefault())
-    }
+    override fun setDefault(config: YamlConfiguration) = setValue(configDefault(), config)
+
 }
 
 //class ComponentContainer(

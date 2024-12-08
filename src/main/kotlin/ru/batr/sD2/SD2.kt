@@ -29,7 +29,9 @@ class SD2 : JavaPlugin() {
     }
 
     override fun onDisable() {
-        // Plugin shutdown logic
+        Settings.save()
+        MainConfig.save()
+        MessagesConfig.save()
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>?): Boolean {
@@ -39,7 +41,6 @@ class SD2 : JavaPlugin() {
                 "1" -> {
                     MainConfig.testItem = sender.inventory.itemInMainHand
                     sender.sendMessage(MessagesConfig.itemChanged(MainConfig.testItem))
-                    sender.sendMessage(MessagesConfig.itemChanged)
                 }
                 "2" -> {
                     MainConfig.testList.forEach {
@@ -56,6 +57,10 @@ class SD2 : JavaPlugin() {
                     }
                     map[args[1]] = sender.inventory.itemInMainHand
                     MainConfig.testMap = map
+                }
+                "4" -> {
+                    val input = args.foldIndexed("") {i, base, arg -> base + " " + if (i > 0) arg else ""}
+                    MessagesConfig.setItemChanged(input)
                 }
             }
         } else {
